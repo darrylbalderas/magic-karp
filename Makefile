@@ -1,3 +1,2 @@
-lint:
-	terraform fmt -recursive
-	terraform validate
+checks:
+	@./scripts/run_checks.sh
