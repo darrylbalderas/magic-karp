@@ -4,7 +4,7 @@
 
 terraform fmt -recursive
 terraform validate
-
+tflint  --recursive
 
 # Security
 

@@ -6,7 +6,7 @@ locals {
 }
 
 data "aws_availability_zones" "available" {}
-data "aws_caller_identity" "current" {}
+# data "aws_caller_identity" "current" {}
 
 # More information about module https://github.com/terraform-aws-modules/terraform-aws-vpc
 module "vpc" {
@@ -39,9 +39,4 @@ module "vpc" {
   )
 
   tags = local.tags
-}
-
-
-output "vpc" {
-  value = module.vpc
 }

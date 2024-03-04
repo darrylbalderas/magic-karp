@@ -10,3 +10,4 @@ Showing the magic of karpenter for having low cost eks cluster
 
 - https://pre-commit.com/
 - https://github.com/gitleaks/gitleaks
+- https://github.com/terraform-linters/tflint
