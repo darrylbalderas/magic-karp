@@ -16,9 +16,9 @@ module "vpc" {
   name = var.vpc_name
   cidr = var.vpc_cidr
 
-  enable_nat_gateway   = true
-  single_nat_gateway   = true
-  enable_dns_hostnames = true
+  enable_nat_gateway      = true
+  single_nat_gateway      = true
+  map_public_ip_on_launch = true
 
   azs             = local.azs
   private_subnets = [for k, v in local.azs : cidrsubnet(var.vpc_cidr, 4, k)]

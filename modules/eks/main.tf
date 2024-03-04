@@ -33,10 +33,31 @@ data "aws_eks_cluster_auth" "this" {
   name = module.eks.cluster_name
 }
 
+# data "aws_ami" "eks_default" {
+#   most_recent = true
+#   owners      = ["amazon"]
+
+#   filter {
+#     name   = "name"
+#     values = ["amazon-eks-node-${var.cluster_version}-v*"]
+#   }
+# }
+
+
+data "aws_ami" "eks_default_arm" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amazon-eks-arm64-node-${var.cluster_version}-v*"]
+  }
+}
+
 
 module "eks" {
   source                          = "terraform-aws-modules/eks/aws"
-  version                         = "19.20.0"
+  version                         = "~> 20.0"
   cluster_name                    = var.cluster_name
   cluster_version                 = var.cluster_version
   cluster_endpoint_public_access  = true
@@ -45,12 +66,12 @@ module "eks" {
 
   cluster_addons = {
     coredns = {
-      preserve    = true
       most_recent = true
-      timeouts = {
-        create = "25m"
-        delete = "10m"
-      }
+      # preserve    = true
+      # timeouts = {
+      #   create = "25m"
+      #   delete = "10m"
+      # }
     }
     kube-proxy = {
       most_recent = true
@@ -64,46 +85,13 @@ module "eks" {
   control_plane_subnet_ids             = var.public_subnet_ids
   cluster_endpoint_public_access_cidrs = var.cluster_endpoint_public_access_cidrs
 
-  create_cloudwatch_log_group   = true
-  create_cluster_security_group = true
-  create_node_security_group    = true
-
-  # Self managed node groups will not automatically create the aws-auth configmap so we need to
-  create_aws_auth_configmap = true
-  manage_aws_auth_configmap = true
+  create_cloudwatch_log_group              = true
+  create_cluster_security_group            = true
+  create_node_security_group               = true
+  enable_cluster_creator_admin_permissions = true
 
   cluster_security_group_tags = {}
   node_security_group_tags    = {}
-
-  aws_auth_users = []
-  aws_auth_roles = [
-    # We need to add in the Karpenter node IAM role for nodes launched by Karpenter
-    {
-      rolearn  = module.karpenter.role_arn
-      username = "system:node:{{EC2PrivateDNSName}}"
-      groups = [
-        "system:bootstrappers",
-        "system:nodes",
-      ]
-    },
-    {
-      rolearn  = module.karpenter.irsa_arn
-      username = "system:node:{{EC2PrivateDNSName}}"
-      groups = [
-        "system:bootstrappers",
-        "system:nodes",
-      ]
-    },
-  ]
-  aws_auth_accounts = []
-
-  self_managed_node_group_defaults = {
-    # # enable discovery of autoscaling groups by cluster-autoscaler
-    autoscaling_group_tags = {
-      "k8s.io/cluster-autoscaler/enabled" : true,
-      "k8s.io/cluster-autoscaler/${var.cluster_name}" : "owned",
-    }
-  }
 
   eks_managed_node_groups = {
     karpenter = {
@@ -140,18 +128,8 @@ module "eks" {
         instance_metadata_tags      = "disabled"
       }
 
-      create_iam_role          = true
-      iam_role_name            = "KarpenterNodeInstanceProfile-${var.cluster_name}"
-      iam_role_use_name_prefix = false
-      iam_role_description     = "Karpenter managed node-group compute role"
-      iam_role_tags            = merge({}, local.cluster_tags)
-      launch_template_tags     = merge({}, local.cluster_tags)
-      iam_role_additional_policies = {
-        AmazonEC2ContainerRegistryReadOnly = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-        AmazonSSMManagedInstanceCore       = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-        additional                         = aws_iam_policy.additional.arn
-      }
-
+      iam_role_arn         = module.karpenter.node_iam_role_arn
+      launch_template_tags = merge({}, local.cluster_tags)
       timeouts = {
         create = "20m"
         update = "20m"
