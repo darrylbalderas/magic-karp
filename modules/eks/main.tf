@@ -12,48 +12,12 @@ locals {
   }
 }
 
-provider "kubernetes" {
-  host                   = module.eks.cluster_endpoint
-  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
-  token                  = data.aws_eks_cluster_auth.this.token
+data "aws_ecrpublic_authorization_token" "token" {
+  provider = aws.ecr_public
 }
-
-provider "helm" {
-  kubernetes {
-    host                   = module.eks.cluster_endpoint
-    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
-    token                  = data.aws_eks_cluster_auth.this.token
-  }
-}
-
-# data "aws_availability_zones" "available" {}
-# data "aws_caller_identity" "current" {}
-# data "aws_ecrpublic_authorization_token" "token" {}
 data "aws_eks_cluster_auth" "this" {
   name = module.eks.cluster_name
 }
-
-# data "aws_ami" "eks_default" {
-#   most_recent = true
-#   owners      = ["amazon"]
-
-#   filter {
-#     name   = "name"
-#     values = ["amazon-eks-node-${var.cluster_version}-v*"]
-#   }
-# }
-
-
-data "aws_ami" "eks_default_arm" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["amazon-eks-arm64-node-${var.cluster_version}-v*"]
-  }
-}
-
 
 module "eks" {
   source                          = "terraform-aws-modules/eks/aws"
@@ -67,11 +31,6 @@ module "eks" {
   cluster_addons = {
     coredns = {
       most_recent = true
-      # preserve    = true
-      # timeouts = {
-      #   create = "25m"
-      #   delete = "10m"
-      # }
     }
     kube-proxy = {
       most_recent = true
@@ -95,45 +54,23 @@ module "eks" {
 
   eks_managed_node_groups = {
     karpenter = {
-      node_group_name                 = "managed-ondemand-karpenter"
-      instance_types                  = ["t4g.small"]
-      create_security_group           = false
-      subnet_ids                      = var.public_subnet_ids
-      max_size                        = 2
-      desired_size                    = 2
-      min_size                        = 1
-      ami_id                          = data.aws_ami.eks_default_arm.id
-      launch_template_name            = "managed-karpenter-node-group"
-      launch_template_use_name_prefix = true
-      launch_template_description     = "Managed node group karpenter launch template"
-      ebs_optimized                   = true
-      enable_monitoring               = true
-      block_device_mappings = {
-        xvda = {
-          device_name = "/dev/xvda"
-          ebs = {
-            volume_size           = 50
-            volume_type           = "gp3"
-            iops                  = 3000
-            throughput            = 150
-            encrypted             = true
-            delete_on_termination = true
-          }
-        }
+      node_group_name        = "managed-ondemand-karpenter"
+      instance_types         = ["t3.small"]
+      create_security_group  = false
+      subnet_ids             = var.public_subnet_ids
+      max_size               = 2
+      desired_size           = 2
+      min_size               = 2
+      create_launch_template = true
+      iam_role_additional_policies = {
+        AmazonSSMManagedInstanceCore       = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        AmazonEC2ContainerRegistryReadOnly = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+        Karpenter                          = aws_iam_policy.karpenter.arn
       }
-      metadata_options = {
-        http_endpoint               = "enabled"
-        http_tokens                 = "required"
-        http_put_response_hop_limit = 2
-        instance_metadata_tags      = "disabled"
-      }
-
-      iam_role_arn         = module.karpenter.node_iam_role_arn
-      launch_template_tags = merge({}, local.cluster_tags)
       timeouts = {
-        create = "20m"
-        update = "20m"
-        delete = "20m"
+        create = "11m"
+        update = "11m"
+        delete = "11m"
       }
       tags = {}
 

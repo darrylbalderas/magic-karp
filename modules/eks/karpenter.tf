@@ -20,30 +20,46 @@ resource "aws_iam_policy" "karpenter" {
 
 # More info https://github.com/terraform-aws-modules/terraform-aws-eks/tree/master/modules/karpenter
 module "karpenter" {
-  source = "terraform-aws-modules/eks/aws//modules/karpenter"
+  source                 = "terraform-aws-modules/eks/aws//modules/karpenter"
+  version                = "~> 20.0"
+  cluster_name           = module.eks.cluster_name
+  enable_irsa            = true
+  irsa_oidc_provider_arn = module.eks.oidc_provider_arn
+  create_node_iam_role   = false
+  node_iam_role_arn      = module.eks.eks_managed_node_groups["karpenter"].iam_role_arn
 
-  cluster_name = module.eks.cluster_name
-
-  enable_irsa                     = true
-  irsa_oidc_provider_arn          = module.eks.oidc_provider_arn
-  irsa_namespace_service_accounts = ["karpenter:karpenter"]
-  enable_spot_termination         = true
-
-  create_iam_role         = true
-  create_node_iam_role    = true
-  create_instance_profile = true
-
-  iam_role_use_name_prefix = false
-  iam_role_description     = "Karpenter IAM role"
-
-  node_iam_role_use_name_prefix = false
-  node_iam_role_description     = "Karpenter Node IAM role"
-  # Attach additional IAM policies to the Karpenter node IAM role
-  node_iam_role_additional_policies = {
+  # Since the nodegroup role will already have an access entry
+  create_access_entry = false
+  iam_role_policies = {
     AmazonSSMManagedInstanceCore       = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
     AmazonEC2ContainerRegistryReadOnly = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
     Karpenter                          = aws_iam_policy.karpenter.arn
   }
 
   tags = merge(local.tags, {})
+}
+
+
+resource "helm_release" "karpenter" {
+  namespace           = "karpenter"
+  create_namespace    = true
+  name                = "karpenter"
+  repository          = "oci://public.ecr.aws/karpenter"
+  repository_username = data.aws_ecrpublic_authorization_token.token.user_name
+  repository_password = data.aws_ecrpublic_authorization_token.token.password
+  chart               = "karpenter"
+  version             = "v0.34.0"
+  wait                = false
+
+  values = [
+    <<-EOT
+    settings:
+      clusterName: ${module.eks.cluster_name}
+      clusterEndpoint: ${module.eks.cluster_endpoint}
+      interruptionQueue: ${module.karpenter.queue_name}
+    serviceAccount:
+      annotations:
+        eks.amazonaws.com/role-arn: ${module.karpenter.iam_role_arn}
+    EOT
+  ]
 }

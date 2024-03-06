@@ -15,16 +15,6 @@ variable "cluster_version" {
   default     = "1.27"
 }
 
-# variable "private_subnet_ids" {
-#   type        = list(string)
-#   description = "A list of IDs of private subnets where worker nodes will be deployed."
-# }
-
-# variable "control_plane_subnet_ids" {
-#   type        = list(string)
-#   description = "A list of IDs of subnets where the EKS control plane will be deployed."
-# }
-
 variable "public_subnet_ids" {
   type        = list(string)
   description = "A list of IDs of public subnets for load balancers and other public resources."
